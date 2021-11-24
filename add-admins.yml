@@ -1,0 +1,33 @@
+---
+# Run: ansible-playbook -i 10.10.10.1, admin-add.yml
+- name: Add admins
+  hosts: all
+  remote_user: ansible
+  become: true
+  vars:
+    admin_users:
+    - {name: "hostberg", rsa_pub: "ssh-rsa AAAAB3NzaC1yc2EAAAADAQABAAABAQCh91Rk+YqHU7wAoCMLAp4qRX2nWNDoY4A6jXEPizg/6oJZTOkwoza2O5PY5PlfoTRXsvIQwFjICEOCshaGzTDrem8nTGQYhw2tzrnklPmz3Z9ubunNLY7c4VLB7ltg6LWibnE3lTa4ZXyKKHnyatxbdaMzopxtZDXrUusN5hPnY4HQ/YdVOdFSuuuU/6ZykVcHwEJJURcRCktmmsZxZloYYV1LdUL4w2sBRRdHM6oD/Q87XLkOSZne9ujWNpvCXUnS8cq5E06arj3c8/ukd3HfKSJz9sheupCJErM/y7LbAnpWyCHGZWicLnoC2BAAUn6x+bjoatZMsXieeKrzuIJB matvey@hostberg.io"}
+  tasks:
+  - name: Add "admins" group
+    ansible.builtin.group:
+      name: admins
+      state: present
+  - name: Add admin users
+    ansible.builtin.user:
+      name: "{{ item.name }}"
+      group: admins
+      groups: sudo
+      state: present
+    loop: "{{ admin_users }}"
+  - name: Allow sudo without password
+    ansible.builtin.lineinfile:
+      dest: /etc/sudoers
+      regexp: '^%sudo'
+      line: '%sudo ALL=(ALL) NOPASSWD: ALL'
+      validate: visudo -cf %s
+      state: present
+  - name: Add rsa key for Ansible user
+    ansible.posix.authorized_key:
+      user: "{{ item.name }}"
+      key: "{{ item.rsa_pub }}"
+    loop: "{{ admin_users }}"

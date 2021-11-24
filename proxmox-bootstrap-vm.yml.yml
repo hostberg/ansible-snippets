@@ -1,0 +1,62 @@
+---
+# Run: ansible-playbook -i 10.10.10.1, --extra-vars "hostname=vm-00.example.com" vm-bootstrap.yml
+- name: Bootstrap Porxmox VM
+  hosts: all
+  remote_user: root
+  tasks:
+    - name: Set hostname
+      ansible.builtin.hostname:
+        name: "{{ hostname }}"
+    - name: Update /etc/hosts
+      ansible.builtin.lineinfile:
+        path: /etc/hosts
+        regexp: "^{{ hostvars[inventory_hostname]['ansible_default_ipv4']['address'] }}"
+        line: "{{ hostvars[inventory_hostname]['ansible_default_ipv4']['address'] }}    {{ hostname }} {{ hostname.split('.')[0] }}"
+    - name: Remove default user
+      ansible.builtin.user:
+        name: user
+        state: absent
+        remove: yes
+    - name: Set timezone
+      community.general.timezone:
+        name: Europe/Amsterdam
+    - name: Set sshd PermitRootLogin
+      ansible.builtin.lineinfile:
+        path: /etc/ssh/sshd_config
+        regexp: "^.?PermitRootLogin"
+        line: "PermitRootLogin prohibit-password"
+    - name: Set sshd PasswordAuthentication
+      ansible.builtin.lineinfile:
+        path: /etc/ssh/sshd_config
+        regexp: "^.?PasswordAuthentication"
+        line: "PasswordAuthentication no"
+    - name: Add Ansible user
+      ansible.builtin.user:
+        name: ansible
+        comment: Ansible
+        group: sudo
+        append: no
+        state: present
+    - name: Install sudo package
+      ansible.builtin.apt:
+        name:
+          - sudo
+        state: present
+        update_cache: true
+    - name: Allow sudo without password
+      ansible.builtin.lineinfile:
+        dest: /etc/sudoers
+        regexp: '^%sudo'
+        line: '%sudo ALL=(ALL) NOPASSWD: ALL'
+        validate: visudo -cf %s
+        state: present
+    - name: Add rsa key for Ansible user
+      ansible.posix.authorized_key:
+        user: ansible
+        key: https://github.com/hostberg.keys
+    - name: Install QEMU guest agent
+      ansible.builtin.apt:
+        name:
+          - qemu-guest-agent
+        state: present
+        update_cache: true
